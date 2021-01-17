@@ -1,0 +1,100 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: traefik-ingress-controller
+  namespace: traefik
+  labels:
+    app: traefik 
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: traefik
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8082"
+        prometheus.io/scheme: "http"
+      labels:
+        app: traefik
+        name: traefik-ingress-lb
+    spec:
+      serviceAccountName: traefik-ingress-controller
+      containers:
+      - image: traefik:#{global.aks.traefik.version}#
+        name: traefik-ingress-lb
+        ports:
+        - name: http
+          containerPort: 80
+        - name: dashboard
+          containerPort: 8080
+        - name: metrics
+          containerPort: 8082
+        args:
+        - --api=true
+        - --api.insecure=true
+        - --api.dashboard=true
+        - --providers.kubernetescrd
+        - --log.level=INFO
+        - --ping=true
+        - --ping.entrypoint=http
+        - --entrypoints.http=true
+        - --entrypoints.http.address=:80
+        - --entrypoints.http.forwardedheaders.insecure=true
+        - --metrics.prometheus=true
+        - --metrics.prometheus.entryPoint=metrics
+        - --entrypoints.metrics=true
+        - --entryPoints.metrics.address=:8082
+        - --metrics.prometheus.addServicesLabels=true
+        - --metrics.prometheus.addEntryPointsLabels=true        
+        - --entrypoints.http.forwardedheaders.trustedIPs=1.2.3.4
+        livenessProbe:
+          failureThreshold: 2
+          httpGet:
+            path: /ping
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /ping
+            port: http
+            scheme: HTTP
+          periodSeconds: 5
+          initialDelaySeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        securityContext:
+          capabilities:
+            add: [NET_BIND_SERVICE]
+            drop: [ALL]
+          readOnlyRootFilesystem: true
+        resources:
+          requests:
+            cpu: 50m
+            memory: 50Mi
+          limits:
+            cpu: 100m
+            memory: 100Mi
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - traefik
+              topologyKey: "kubernetes.io/hostname"   
+      nodeSelector:
+        kubernetes.io/os: linux
+      imagePullSecrets:
+        - name: hello

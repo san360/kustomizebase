@@ -1,0 +1,21 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: traefik-ingress-service
+  namespace: traefik
+  labels:
+    app: traefik
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+spec:
+  selector:
+    app: traefik
+  ports:
+    - protocol: TCP
+      name: http
+      port: 80
+    - protocol: TCP
+      name: dashboard
+      port: 8080
+  type: LoadBalancer
+  loadBalancerIP: 1.2.3.4
